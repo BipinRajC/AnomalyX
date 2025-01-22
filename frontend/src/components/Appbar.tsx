@@ -1,22 +1,22 @@
 import { Activity, BarChart, Database, Home, Menu, Upload, X } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function Appbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigationItems = [
-    { name: 'Home', icon: Home, href: '/' },
     { name: 'Upload Data', icon: Upload, href: '/upload' },
     { name: 'SQL Query', icon: Database, href: '/query' },
     { name: 'Analysis', icon: BarChart, href: '/analysis' },
   ];
-
+  const navigate = useNavigate();
   return (
     <>
       <header className="bg-slate-900/50 border-b border-slate-700 sticky top-0 z-50">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 hover:cursor-pointer" onClick={() => navigate("/")}>
               <Activity className="w-8 h-8 text-blue-400" />
               <span className="text-2xl font-bold text-white">AnomalyX</span>
             </div>
