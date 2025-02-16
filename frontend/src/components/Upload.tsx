@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, Upload, Wifi, ArrowRight, FileSpreadsheet, Activity as PulseIcon } from 'lucide-react';
+import { Upload, Wifi, ArrowRight, FileSpreadsheet, Activity as PulseIcon } from 'lucide-react';
 import Appbar from './Appbar';
 
 function UploadComponent() {

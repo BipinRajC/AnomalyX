@@ -1,4 +1,4 @@
-import { Activity, BarChart, Database, Home, Menu, Upload, X } from "lucide-react";
+import { Activity, BarChart, CpuIcon, Database, Menu, Upload, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -8,6 +8,7 @@ export default function Appbar() {
     { name: 'Upload Data', icon: Upload, href: '/upload' },
     { name: 'SQL Query', icon: Database, href: '/query' },
     { name: 'Analysis', icon: BarChart, href: '/analysis' },
+    { name: 'RNN Trainer', icon: CpuIcon, href: "https://anomalyxlab-8ox8xpjijdw7tdgrxekl2n.streamlit.app/" }
   ];
   const navigate = useNavigate();
   return (
@@ -57,7 +58,7 @@ export default function Appbar() {
                 <a
                   key={item.name}
                   href={item.href}
-                  className="text-slate-300 hover:text-white block px-3 py-2 rounded-md text-base font-medium flex items-center gap-2 hover:bg-slate-800 transition-colors"
+                  className="text-slate-300 hover:text-white px-3 py-2 rounded-md text-base font-medium flex items-center gap-2 hover:bg-slate-800 transition-colors"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   <item.icon className="w-4 h-4" />

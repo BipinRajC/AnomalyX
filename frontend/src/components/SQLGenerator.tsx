@@ -1,152 +1,290 @@
-import React, { useState } from 'react';
-import { Activity, Database, ArrowRight, History, Copy, Check, MessageSquare } from 'lucide-react';
-import Appbar from './Appbar';
+import React, { useState, useRef, useEffect } from 'react';
+import { MessageSquare, Send, Bot, Sparkles, Brain, Zap, PlusCircle, MessageCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import Appbar from '../components/Appbar';
 
-function Query() {
-  const [query, setQuery] = useState('');
-  const [sqlResult, setSqlResult] = useState('');
+export type Message = {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp?: Date;
+};
+
+export type Chat = {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+const Index = () => {
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [currentChat, setCurrentChat] = useState<Chat | null>(null);
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [queryHistory, setQueryHistory] = useState<Array<{ natural: string; sql: string }>>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [currentChat?.messages]);
+
+  const createNewChat = () => {
+    if (currentChat && currentChat.messages.length === 0) {
+      // Don't create a new chat if the current one is empty
+      return;
+    }
+
+    const newChat: Chat = {
+      id: crypto.randomUUID(),
+      title: 'New Chat',
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    setChats(prev => [newChat, ...prev]);
+    setCurrentChat(newChat);
+    setIsSidebarOpen(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    if (!input.trim() || isLoading || !currentChat) return;
+
+    const userMessage: Message = {
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date()
+    };
+
+    setInput('');
+
+    const updatedChat: Chat = {
+      ...currentChat,
+      messages: [...currentChat.messages, userMessage],
+      updatedAt: new Date()
+    };
+
+    setCurrentChat(updatedChat);
+
+    // Only add to chats if this is the first message
+    if (currentChat.messages.length === 0) {
+      setChats(prev => prev.map(chat =>
+        chat.id === currentChat.id ? updatedChat : chat
+      ));
+    }
 
     setIsLoading(true);
-    // Simulated API call - replace with actual backend call
-    setTimeout(() => {
-      const result = `SELECT * FROM network_traffic 
-WHERE timestamp >= NOW() - INTERVAL '1 hour'
-  AND anomaly_score > 0.8
-ORDER BY anomaly_score DESC
-LIMIT 100;`;
 
-      setSqlResult(result);
-      setQueryHistory(prev => [...prev, { natural: query, sql: result }]);
+    // Simulated AI response
+    setTimeout(() => {
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: `I understand you're asking about ${userMessage.content}. Let me help you with that. This is a simulated response that would normally come from an AI model.`,
+        timestamp: new Date()
+      };
+
+      const chatWithAiResponse: Chat = {
+        ...updatedChat,
+        messages: [...updatedChat.messages, assistantMessage],
+        updatedAt: new Date()
+      };
+
+      setCurrentChat(chatWithAiResponse);
+      setChats(prev => prev.map(chat =>
+        chat.id === currentChat.id ? chatWithAiResponse : chat
+      ));
       setIsLoading(false);
     }, 1000);
   };
 
-  const copyToClipboard = async () => {
-    await navigator.clipboard.writeText(sqlResult);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col">
-      {/* Header */}
+    <div className="h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col">
       <Appbar />
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-12 flex-grow">
-        <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl font-bold text-white text-center mb-4">
-            Natural Language to SQL Query
-          </h1>
-          <p className="text-xl text-slate-300 text-center mb-12">
-            Describe your data needs in plain English, and we'll generate the appropriate SQL query.
-          </p>
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Overlay for mobile when sidebar is open */}
+        {isSidebarOpen && (
+          <div
+            className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-20"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
 
-          {/* Query Input Form */}
-          <form onSubmit={handleSubmit} className="mb-8">
-            <div className="bg-slate-800 rounded-xl p-6 shadow-lg">
-              <div className="flex items-start gap-4">
-                <MessageSquare className="w-6 h-6 text-blue-400 mt-3" />
-                <div className="flex-1">
-                  <textarea
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Example: Show me all network traffic with high anomaly scores from the last hour"
-                    className="w-full h-32 bg-slate-900 text-slate-200 rounded-lg p-4 placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
+        {/* Sidebar */}
+        <div
+          className={`absolute md:relative inset-y-0 left-0 z-30 bg-slate-800 border-r border-slate-700 transition-all duration-300 ${isSidebarOpen ? 'w-80' : 'w-0'
+            }`}
+        >
+          {isSidebarOpen && (
+            <div className="flex-1 overflow-y-auto p-2 space-y-2">
+              <div className="sticky top-0 z-10 bg-slate-800 pb-2">
+                <button
+                  onClick={createNewChat}
+                  className="w-full flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                  New Chat
+                </button>
+              </div>
+              {chats.map(chat => (
+                <button
+                  key={chat.id}
+                  onClick={() => {
+                    setCurrentChat(chat);
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${currentChat?.id === chat.id
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-300 hover:bg-slate-700'
+                    }`}
+                >
+                  <MessageCircle className="w-5 h-5 flex-shrink-0" />
+                  <span className="truncate text-left">
+                    {chat.messages[0]?.content.slice(0, 30) || 'New Chat'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-none p-4">
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors"
+            >
+              {isSidebarOpen ? (
+                <ChevronLeft className="w-5 h-5" />
+              ) : (
+                <ChevronRight className="w-5 h-5" />
+              )}
+            </button>
+          </div>
+
+          <main className="flex-1 container mx-auto px-4 py-8 flex flex-col overflow-hidden">
+            <div className="max-w-4xl mx-auto w-full h-full flex flex-col">
+              {!currentChat && (
+                <div className="flex-none">
+                  <h1 className="text-4xl font-bold text-white text-center mb-4">
+                    AI Assistant
+                  </h1>
+                  <p className="text-xl text-slate-300 text-center mb-8">
+                    Chat with our AI assistant to get help with your questions
+                  </p>
+                </div>
+              )}
+
+              {/* Chat Messages */}
+              <div className="flex-1 bg-slate-800 rounded-xl p-6 mb-4 shadow-lg overflow-y-auto min-h-0">
+                <div className="space-y-4">
+                  {!currentChat || currentChat.messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-6 py-8">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 w-full max-w-lg">
+                        <div className="flex flex-col items-center p-6 bg-slate-700 rounded-lg">
+                          <Bot className="w-8 h-8 text-blue-400 mb-2" />
+                          <p className="text-slate-200 text-sm">Advanced AI Assistant</p>
+                        </div>
+                        <div className="flex flex-col items-center p-6 bg-slate-700 rounded-lg">
+                          <Brain className="w-8 h-8 text-blue-400 mb-2" />
+                          <p className="text-slate-200 text-sm">Intelligent Responses</p>
+                        </div>
+                        <div className="flex flex-col items-center p-6 bg-slate-700 rounded-lg">
+                          <Sparkles className="w-8 h-8 text-blue-400 mb-2" />
+                          <p className="text-slate-200 text-sm">Natural Conversations</p>
+                        </div>
+                        <div className="flex flex-col items-center p-6 bg-slate-700 rounded-lg">
+                          <Zap className="w-8 h-8 text-blue-400 mb-2" />
+                          <p className="text-slate-200 text-sm">Fast & Accurate</p>
+                        </div>
+                      </div>
+                      <p className="text-slate-400 max-w-md">
+                        Start a conversation with our AI assistant. Ask questions, get help, or explore new ideas.
+                      </p>
+                      <button
+                        onClick={createNewChat}
+                        className={`flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors ${currentChat == null ? "" : "invisible"}`}
+                      >
+                        <PlusCircle className="w-5 h-5" />
+                        Start New Chat
+                      </button>
+                    </div>
+                  ) : (
+                    currentChat.messages.map((message, index) => (
+                      <div
+                        key={index}
+                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-[80%] rounded-lg p-4 ${message.role === 'user'
+                            ? 'bg-blue-500 text-white ml-auto'
+                            : 'bg-slate-700 text-slate-200'
+                            }`}
+                        >
+                          <p className="whitespace-pre-wrap">{message.content}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  {isLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-slate-700 text-slate-200 rounded-lg p-4">
+                        <div className="flex space-x-2">
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              {/* Input Form */}
+              <form onSubmit={handleSubmit} className="flex-none bg-slate-800 rounded-xl p-4 shadow-lg">
+                <div className="flex items-center gap-4">
+                  <MessageSquare className="w-6 h-6 text-blue-400 flex-shrink-0" />
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder={currentChat ? "Type your message here..." : "Create or select a chat to start"}
+                    disabled={!currentChat}
+                    className="flex-grow bg-slate-900 text-slate-200 rounded-lg px-4 py-3 placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <button
                     type="submit"
-                    disabled={isLoading || !query.trim()}
-                    className={`mt-4 px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${isLoading || !query.trim()
+                    disabled={isLoading || !input.trim() || !currentChat}
+                    className={`p-3 rounded-lg flex items-center justify-center transition-colors ${isLoading || !input.trim() || !currentChat
                       ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                       : 'bg-blue-500 hover:bg-blue-600 text-white'
                       }`}
                   >
-                    {isLoading ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
-                        Generating...
-                      </>
-                    ) : (
-                      <>
-                        Generate SQL
-                        <ArrowRight className="w-5 h-5" />
-                      </>
-                    )}
+                    <Send className="w-5 h-5" />
                   </button>
                 </div>
-              </div>
+              </form>
             </div>
-          </form>
+          </main>
 
-          {/* SQL Result */}
-          {sqlResult && (
-            <div className="bg-slate-800 rounded-xl p-6 mb-8 shadow-lg">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Database className="w-5 h-5 text-blue-400" />
-                  <h2 className="text-xl font-semibold text-white">Generated SQL Query</h2>
-                </div>
-                <button
-                  onClick={copyToClipboard}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 text-green-400" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      Copy
-                    </>
-                  )}
-                </button>
-              </div>
-              <pre className="bg-slate-900 p-4 rounded-lg overflow-x-auto">
-                <code className="text-slate-300">{sqlResult}</code>
-              </pre>
+          {/* Footer */}
+          <footer className="flex-none bg-slate-900 border-t border-slate-800 py-8">
+            <div className="container mx-auto px-4 text-center text-slate-400">
+              <p>© {new Date().getFullYear()} AnomalyX. All rights reserved.</p>
             </div>
-          )}
-
-          {/* Query History */}
-          {queryHistory.length > 0 && (
-            <div className="bg-slate-800 rounded-xl p-6 shadow-lg">
-              <div className="flex items-center gap-2 mb-4">
-                <History className="w-5 h-5 text-blue-400" />
-                <h2 className="text-xl font-semibold text-white">Recent Queries</h2>
-              </div>
-              <div className="space-y-4">
-                {queryHistory.slice().reverse().map((item, index) => (
-                  <div key={index} className="border-b border-slate-700 last:border-0 pb-4 last:pb-0">
-                    <p className="text-slate-300 mb-2">{item.natural}</p>
-                    <pre className="bg-slate-900 p-3 rounded-lg overflow-x-auto">
-                      <code className="text-sm text-slate-400">{item.sql}</code>
-                    </pre>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          </footer>
         </div>
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-slate-900 border-t border-slate-800 py-8 mt-auto">
-        <div className="container mx-auto px-4 text-center text-slate-400">
-          <p>© {new Date().getFullYear()} AnomalyX. All rights reserved.</p>
-        </div>
-      </footer>
-    </div>
+      </div >
+    </div >
   );
-}
+};
 
-export default Query;
+export default Index;
+
