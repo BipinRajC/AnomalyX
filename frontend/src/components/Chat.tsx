@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, Bot, Sparkles, Brain, Zap, PlusCircle, MessageCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import Appbar from '../components/Appbar';
+import Appbar from './Appbar';
 
 export type Message = {
   role: 'user' | 'assistant';
@@ -16,7 +16,7 @@ export type Chat = {
   updatedAt: Date;
 };
 
-const Index = () => {
+const Chat = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [currentChat, setCurrentChat] = useState<Chat | null>(null);
   const [input, setInput] = useState('');
@@ -286,5 +286,5 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default Chat;
 

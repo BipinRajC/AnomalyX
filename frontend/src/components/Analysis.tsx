@@ -1,174 +1,290 @@
-import { Activity, BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon, Brain, AlertTriangle, TrendingUp, Download } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { useState } from 'react';
 import Appbar from './Appbar';
+import { Loader2 } from 'lucide-react';
+import { useRecoilValue } from 'recoil';
+import { DFAtom, FileNameAtom } from '../atoms';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+
+interface Anomaly {
+  anomaly: boolean;
+  ds: string;
+  y: number;
+}
+
+interface Plots {
+  hourlyAnomalies: string;
+  anomalyIntensity: string;
+  timeSeries: string;
+}
 
 function Analysis() {
-  // Sample data - replace with actual data from backend
-  const timeSeriesData = [
-    { timestamp: '00:00', anomalyScore: 0.2, packetCount: 150 },
-    { timestamp: '01:00', anomalyScore: 0.8, packetCount: 320 },
-    { timestamp: '02:00', anomalyScore: 0.4, packetCount: 230 },
-    { timestamp: '03:00', anomalyScore: 0.9, packetCount: 450 },
-    { timestamp: '04:00', anomalyScore: 0.3, packetCount: 180 },
-    { timestamp: '05:00', anomalyScore: 0.6, packetCount: 280 },
-  ];
+  const df = useRecoilValue(DFAtom)
+  const navigate = useNavigate()
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const fileName = useRecoilValue(FileNameAtom)
+  const [isPreprocessed, setIsPreprocessed] = useState(false);
+  const [isDetectedAnomalies, SetIsDetectedAnomalies] = useState(false);
+  const [plots, setPlots] = useState<Plots | null>(null);
+  const [isPlotting, setIsPlotting] = useState(false);
 
-  const protocolDistribution = [
-    { name: 'TCP', value: 65 },
-    { name: 'UDP', value: 25 },
-    { name: 'ICMP', value: 10 },
-  ];
+  if (!df) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center text-center bg-gray-100">
+        <p className="text-lg font-medium text-gray-700">Please upload a dataset</p>
+        <button className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600 transition" onClick={() => navigate("/upload")}>
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
-  const anomalyTypes = [
-    { type: 'DDoS Attack', count: 45 },
-    { type: 'Port Scan', count: 30 },
-    { type: 'Data Exfiltration', count: 15 },
-    { type: 'Malware Traffic', count: 10 },
-  ];
+  const handlePreprocess = async () => {
+    try {
+      setIsLoading(true);
+      setIsPreprocessed(false);
+      setMessage('');
+      await axios.post("http://127.0.0.1:5000/preprocess_data", {
+        "file_path": `uploads/${fileName}`,
+        "timestamp_col": "Stime",
+        "value_col": "Dload"
+      });
+      setIsLoading(false);
+      setIsPreprocessed(true);
+      setMessage('Data processed successfully');
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Failed to preprocess data");
+    } finally {
+      setIsLoading(false);
+      setIsPreprocessed(true);
+    }
+  };
 
-  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
+  const handleDetectAnomalies = async () => {
+    try {
+      setIsDetecting(true);
+      SetIsDetectedAnomalies(false);
+      const response = await axios.post("http://127.0.0.1:5000/detect_anomalies", {
+        "file_path": `uploads/${fileName}`,
+        "level": 85
+      })
+      
+      setAnomalies(response.data.anomalies)
+      setIsDetecting(false);
+      SetIsDetectedAnomalies(true)
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Error while detecting anomalies");
+    } finally {
+      setIsDetecting(false);
+      SetIsDetectedAnomalies(true)
+    }
+  };
 
-  const insights = [
-    {
-      title: 'High Risk Detection',
-      description: 'Detected potential DDoS attack patterns between 01:00 and 03:00 with anomaly scores exceeding 0.8',
-      icon: AlertTriangle,
-      color: 'text-red-400',
-    },
-    {
-      title: 'Traffic Pattern Analysis',
-      description: 'TCP traffic dominates the network (65%), suggesting heavy reliance on connection-oriented protocols',
-      icon: TrendingUp,
-      color: 'text-blue-400',
-    },
-    {
-      title: 'AI Recommendation',
-      description: 'Consider implementing rate limiting on affected endpoints to mitigate potential DDoS attacks',
-      icon: Brain,
-      color: 'text-purple-400',
-    },
-  ];
+  const handlePlotAnomalies = async () => {
+    try {
+      setIsPlotting(true);
+
+      const response1 = await axios.post("http://127.0.0.1:5000/advanced_anomaly_analysis", {
+        "file_path": `uploads/${fileName}`,
+        "level": 85
+      }, { responseType: "blob" });
+  
+      const url1 = URL.createObjectURL(response1.data);
+      const response2 = await axios.get("http://127.0.0.1:5000/download_anomaly_intensity_plot", {
+        responseType: "blob"
+      });
+  
+      const url2 = URL.createObjectURL(response2.data);
+      const response3 = await axios.post("http://127.0.0.1:5000/plot_anomalies", {
+        "file_path": `uploads/${fileName}`,
+        "level": 85
+      }, { responseType: "blob" });
+  
+      const url3 = URL.createObjectURL(response3.data);
+  
+      setPlots({
+        hourlyAnomalies: url1,
+        anomalyIntensity: url2,
+        timeSeries: url3
+      });
+  
+    } catch (error) {
+      console.error("Error fetching anomaly plots:", error);
+    } finally {
+      setIsPlotting(false);
+    }
+  };
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col">
-      {/* Header */}
       <Appbar />
 
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8 flex-grow">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Network Traffic Analysis</h1>
-          <p className="text-slate-300">Comprehensive analysis of network traffic patterns and anomalies</p>
+        <div className="bg-slate-800 rounded-lg p-4 mb-6">
+          <h2 className="text-slate-200 text-lg font-semibold mb-3">Dataset Columns</h2>
+          <div className="overflow-x-auto whitespace-nowrap pb-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">
+            <div className="inline-flex gap-2">
+              {df.map((column, index) => (
+                <span
+                  key={column}
+                  className="inline-block px-3 py-1 bg-slate-700 text-slate-300 rounded-full text-sm"
+                >
+                  {column}{index < df.length - 1 ? "," : ""}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* AI Insights */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {insights.map((insight, index) => (
-            <div key={index} className="bg-slate-800 rounded-xl p-6 shadow-lg">
-              <div className="flex items-start gap-4">
-                <insight.icon className={`w-8 h-8 ${insight.color}`} />
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">{insight.title}</h3>
-                  <p className="text-slate-300 text-sm">{insight.description}</p>
+        <div className="space-y-4">
+          <button
+            onClick={handlePreprocess}
+            disabled={isLoading}
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-500 disabled:cursor-not-allowed
+                     text-white font-semibold px-6 py-3 rounded-lg 
+                     transition-colors duration-200 flex items-center justify-center gap-2 w-full sm:w-auto"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              'Preprocess Data'
+            )}
+          </button>
+
+          {message && (
+            <div className="bg-green-500/10 text-green-400 px-4 py-2 rounded-lg">
+              {message}
+            </div>
+          )}
+          <button
+            onClick={handleDetectAnomalies}
+            disabled={isDetecting || !isPreprocessed}
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400/40 disabled:cursor-not-allowed
+                       text-white disabled:text-white/60 font-semibold px-6 py-3 rounded-lg 
+                       transition-colors duration-200 flex items-center justify-center gap-2"
+          >
+            {isDetecting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Detecting...
+              </>
+            ) : (
+              'Detect Anomalies'
+            )}
+          </button>
+
+          {anomalies.length > 0 && (
+            <div className="bg-slate-800 rounded-lg overflow-hidden">
+              <div className="max-h-[400px] overflow-y-auto">
+                <table className="w-full">
+                  <thead className="sticky top-0 bg-slate-700">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Slno
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Timestamp
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Value
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700">
+                    {anomalies.map((anomaly, index) => (
+                      <tr key={index} className="hover:bg-slate-700/50">
+                        <td className='px-6 py-4 whitespace-nowrap text-sm text-slate-300'>
+                          {index + 1}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                          {new Date(anomaly.ds).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">
+                          {anomaly.y.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-500/10 text-red-400">
+                            Anomaly Detected
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={handlePlotAnomalies  }
+            disabled={isPlotting || !isPreprocessed || !isDetectedAnomalies}
+            className="bg-red-600 hover:bg-red-700 disabled:bg-red-400/40 disabled:cursor-not-allowed
+                       text-white disabled:text-white/60 font-semibold px-6 py-3 rounded-lg 
+                       transition-colors duration-200 flex items-center justify-center gap-2"
+          >
+            {isPlotting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Plotting...
+              </>
+            ) : (
+              'Plot Graphs'
+            )}
+          </button>
+          {plots && (
+            <div className="bg-slate-800 rounded-lg p-6">
+              <h2 className="text-slate-200 text-lg font-semibold mb-4">
+                Anomaly Analysis Plots
+              </h2>
+              <div className="flex flex-col space-y-6">
+                <div className="space-y-2">
+                  <h3 className="text-slate-300 font-medium">Hourly Analysis</h3>
+                  <div className="w-full bg-slate-700 rounded-lg overflow-hidden">
+                    <img
+                      src={plots.hourlyAnomalies}
+                      alt="Time Series Analysis"
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-slate-300 font-medium">Distribution Analysis</h3>
+                  <div className="w-full bg-slate-700 rounded-lg overflow-hidden">
+                    <img
+                      src={plots.anomalyIntensity}
+                      alt="Distribution Analysis"
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-slate-300 font-medium">Time Series Analysis</h3>
+                  <div className="w-full bg-slate-700 rounded-lg overflow-hidden">
+                    <img
+                      src={plots.timeSeries}
+                      alt="Correlation Analysis"
+                      className="w-full h-auto object-cover"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          ))}
-        </div>
-
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Anomaly Score Timeline */}
-          <div className="bg-slate-800 rounded-xl p-6 shadow-lg">
-            <div className="flex items-center gap-2 mb-6">
-              <LineChartIcon className="w-5 h-5 text-blue-400" />
-              <h2 className="text-xl font-semibold text-white">Anomaly Score Timeline</h2>
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={timeSeriesData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="timestamp" stroke="#9CA3AF" />
-                  <YAxis stroke="#9CA3AF" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1F2937', border: 'none' }}
-                    labelStyle={{ color: '#9CA3AF' }}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="anomalyScore" stroke="#3B82F6" name="Anomaly Score" />
-                  <Line type="monotone" dataKey="packetCount" stroke="#10B981" name="Packet Count" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Protocol Distribution */}
-          <div className="bg-slate-800 rounded-xl p-6 shadow-lg">
-            <div className="flex items-center gap-2 mb-6">
-              <PieChartIcon className="w-5 h-5 text-blue-400" />
-              <h2 className="text-xl font-semibold text-white">Protocol Distribution</h2>
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={protocolDistribution}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    paddingAngle={5}
-                    dataKey="value"
-                    label
-                  >
-                    {protocolDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1F2937', border: 'none' }}
-                    labelStyle={{ color: '#9CA3AF' }}
-                  />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Anomaly Types */}
-          <div className="bg-slate-800 rounded-xl p-6 shadow-lg lg:col-span-2">
-            <div className="flex items-center gap-2 mb-6">
-              <BarChart3 className="w-5 h-5 text-blue-400" />
-              <h2 className="text-xl font-semibold text-white">Anomaly Types Distribution</h2>
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={anomalyTypes}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="type" stroke="#9CA3AF" />
-                  <YAxis stroke="#9CA3AF" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1F2937', border: 'none' }}
-                    labelStyle={{ color: '#9CA3AF' }}
-                  />
-                  <Bar dataKey="count" fill="#3B82F6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* Export Button */}
-        <div className="flex justify-end">
-          <button className="flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">
-            <Download className="w-5 h-5" />
-            Export Analysis Report
-          </button>
-        </div>
+          )}
+        </div>        
       </main>
 
-      {/* Footer */}
       <footer className="bg-slate-900 border-t border-slate-800 py-8 mt-auto">
         <div className="container mx-auto px-4 text-center text-slate-400">
           <p>© {new Date().getFullYear()} AnomalyX. All rights reserved.</p>

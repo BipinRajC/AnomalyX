@@ -1,10 +1,18 @@
 import React, { useState } from 'react';
-import { Upload, Wifi, ArrowRight, FileSpreadsheet, Activity as PulseIcon } from 'lucide-react';
+import { Upload, Wifi, ArrowRight, FileSpreadsheet, Activity as PulseIcon, Loader2 } from 'lucide-react';
 import Appbar from './Appbar';
+import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { useSetRecoilState } from 'recoil';
+import { DFAtom, FileNameAtom } from '../atoms';
 
 function UploadComponent() {
+  const navigate = useNavigate();
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const setDf = useSetRecoilState(DFAtom);
+  const setFileName = useSetRecoilState(FileNameAtom);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -25,6 +33,7 @@ function UploadComponent() {
       const file = e.dataTransfer.files[0];
       if (file.type === "text/csv") {
         setSelectedFile(file);
+        setFileName(file.name)
       }
     }
   };
@@ -32,6 +41,28 @@ function UploadComponent() {
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0]);
+      setFileName(e.target.files[0].name);
+    }
+  };
+
+  const handleSubmit = async () => {
+    try {
+      setIsLoading(true);
+      const formData = new FormData();
+      formData.append("file", selectedFile!);
+  
+      const response = await axios.post("http://127.0.0.1:5000/load_dataset", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+
+      setDf(response.data.columns)
+      alert(response.data.message)
+      navigate("/analysis")
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Failed to load dataset");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -100,9 +131,13 @@ function UploadComponent() {
                   ? 'bg-blue-500 hover:bg-blue-600 text-white'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'}`}
               disabled={!selectedFile}
+              onClick={handleSubmit}
             >
-              Start Analysis
-              <ArrowRight className="w-5 h-5" />
+              {isLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+               <>Start Analysis <ArrowRight className="w-5 h-5" /></>
+              )}
             </button>
           </div>
 
