@@ -90,3 +90,127 @@ def query():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
+
+## NEW CODE
+
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import torch
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+import faiss
+import numpy as np
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+
+app = Flask(__name__)
+CORS(app)
+
+class RAGEngine:
+    def __init__(self, dataset_path):
+        self.df = pd.read_csv(dataset_path, dtype=str, low_memory=False)
+        self.df.columns = self.df.columns.str.strip().str.lower()
+        self.prepare_text_representation()
+        
+        # Initialize TF-IDF and FAISS
+        self.vectorizer = TfidfVectorizer()
+        tfidf_matrix = self.vectorizer.fit_transform(self.df['text_representation'])
+        self.tfidf_matrix = tfidf_matrix.astype(np.float32)
+        
+        # Build FAISS index
+        self.index = faiss.IndexFlatIP(self.tfidf_matrix.shape[1])
+        self.index.add(self.tfidf_matrix.toarray())
+        
+        # Load model with 8-bit quantization
+        self.model_name = "deepseek-ai/deepseek-coder-1.3b-base"
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        
+        if torch.cuda.is_available():
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                load_in_8bit=True,
+                device_map="auto",
+                trust_remote_code=True
+            )
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                trust_remote_code=True
+            ).to("cpu")
+        
+        # Create pipeline for efficient generation
+        self.pipe = pipeline(
+            "text-generation",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            device=self.model.device.index if torch.cuda.is_available() else -1,
+            max_new_tokens=200,
+            do_sample=True,
+            temperature=0.7,
+            top_p=0.9,
+        )
+
+    def prepare_text_representation(self):
+        self.df['text_representation'] = self.df.apply(
+            lambda row: f"Source IP: {row.get('srcip', 'Unknown')}, "
+                        f"Destination IP: {row.get('dstip', 'Unknown')}, "
+                        f"Protocol: {row.get('proto', 'Unknown')}, "
+                        f"State: {row.get('state', 'Unknown')}, "
+                        f"Attack Category: {row.get('attack_cat', 'Unknown')}, "
+                        f"Source Bytes: {row.get('sbytes', 'Unknown')}, "
+                        f"Destination Bytes: {row.get('dbytes', 'Unknown')}",
+            axis=1
+        )
+
+    def retrieve_context(self, query, top_k=3):
+        query_vector = self.vectorizer.transform([query]).astype(np.float32).toarray()
+        distances, indices = self.index.search(query_vector, top_k)
+        return self.df.iloc[indices[0]]
+
+    def generate_response(self, query, retrieved_context):
+       context_str = "\n".join([
+            f"Context {i+1}: {row['text_representation']}" for i, row in retrieved_context.iterrows()
+        ])
+        prompt = f"""Network Security Insights Chatbot
+
+Query: {query}
+
+Retrieved Contexts:
+{context_str}
+
+Provide a detailed and helpful response based on the retrieved network security information."""
+        try:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+            outputs = self.model.generate(
+                inputs.input_ids, 
+                max_length=500, 
+                num_return_sequences=1,
+                do_sample=True,
+                temperature=0.7,
+                top_p=0.9
+            )
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            clean_response = response[len(prompt):].strip()
+            return clean_response
+        except Exception as e:
+            return f"Error generating response: {str(e)}"
+
+# Initialize RAG engine
+rag_engine = RAGEngine("dataset.csv")
+
+@app.route("/query", methods=["POST"])
+def query():
+    data = request.json
+    query_text = data.get("query", "")
+    
+    if not query_text:
+        return jsonify({"error": "Query is required"}), 400
+    
+    retrieved_context = rag_engine.retrieve_context(query_text)
+    response = rag_engine.generate_response(query_text, retrieved_context)
+    return jsonify({"query": query_text, "response": response})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=False)
