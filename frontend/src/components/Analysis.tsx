@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Appbar from './Appbar';
-import { Loader2 } from 'lucide-react';
+import { BotMessageSquare, Loader, Loader2 } from 'lucide-react';
 import { useRecoilValue } from 'recoil';
 import { DFAtom, FileNameAtom } from '../atoms';
 import { useNavigate } from 'react-router-dom';
@@ -30,6 +30,58 @@ function Analysis() {
   const [isDetectedAnomalies, SetIsDetectedAnomalies] = useState(false);
   const [plots, setPlots] = useState<Plots | null>(null);
   const [isPlotting, setIsPlotting] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    async function checkAuthentication() {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("Please log in.");
+        navigate("/login");
+        return;
+      }
+
+      try {
+        const res = await axios.post(
+          "http://localhost:9000/api/v1/user/authenticate",
+          {},
+          {
+            headers: {
+              Authorization: `${token}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+
+        if (res.data.LoggedIn) {
+          setIsAuthenticated(true);
+        } else {
+          alert("You are not logged in");
+          navigate("/login");
+        }
+      } catch (error) {
+        console.error("Error during authentication:", error);
+        navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    checkAuthentication();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-gray-100">
+        <Loader className="w-12 h-12 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; 
+  }
 
   if (!df) {
     return (
@@ -126,6 +178,13 @@ function Analysis() {
       <Appbar />
 
       <main className="container mx-auto px-4 py-8 flex-grow">
+        <button
+          onClick={() => navigate("/chat")}
+          className="text-slate-300 hover:text-white bg-slate-900 px-4 py-2 pb-3 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-md mb-6"
+        >
+          <BotMessageSquare className="w-4 h-4" />
+          User our AI assistant
+        </button>
         <div className="bg-slate-800 rounded-lg p-4 mb-6">
           <h2 className="text-slate-200 text-lg font-semibold mb-3">Dataset Columns</h2>
           <div className="overflow-x-auto whitespace-nowrap pb-2 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-700">

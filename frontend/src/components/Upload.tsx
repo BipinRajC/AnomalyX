@@ -14,6 +14,40 @@ function UploadComponent() {
   const setDf = useSetRecoilState(DFAtom);
   const setFileName = useSetRecoilState(FileNameAtom);
 
+  async function isAuthenticated() {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("Please log in.");
+      navigate("/login");
+      return false; 
+    }
+  
+    try {
+      const res = await axios.post(
+        "http://localhost:9000/api/v1/user/authenticate",
+        {},
+        {
+          headers: {
+            Authorization: `${token}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+  
+      console.log(res);
+      if (!res.data.LoggedIn) {
+        alert("You are not logged in");
+        navigate("/login");
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Error during authentication:", error);
+      alert("Authentication failed. Please try again.");
+      return false; 
+    }
+  }
+
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -47,6 +81,8 @@ function UploadComponent() {
 
   const handleSubmit = async () => {
     try {
+      const isAuthenticatedResult = await isAuthenticated();
+    if (!isAuthenticatedResult) return
       setIsLoading(true);
       const formData = new FormData();
       formData.append("file", selectedFile!);

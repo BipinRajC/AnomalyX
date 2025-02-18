@@ -1,6 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Send, Bot, Sparkles, Brain, Zap, PlusCircle, MessageCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MessageSquare, Send, Bot, Sparkles, Brain, Zap, PlusCircle, MessageCircle, ChevronLeft, ChevronRight, Loader } from 'lucide-react';
 import Appbar from './Appbar';
+import axios from 'axios';
+import { useRecoilValue } from 'recoil';
+import { FileNameAtom } from '../atoms';
+import { useNavigate } from 'react-router-dom';
 
 export type Message = {
   role: 'user' | 'assistant';
@@ -23,6 +27,10 @@ const Chat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileName = useRecoilValue(FileNameAtom)
+  const navigate = useNavigate()
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,6 +39,56 @@ const Chat = () => {
   useEffect(() => {
     scrollToBottom();
   }, [currentChat?.messages]);
+
+  useEffect(() => {
+    async function checkAuthentication() {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        alert("Please log in.");
+        navigate("/login");
+        return;
+      }
+
+      try {
+        const res = await axios.post(
+          "http://localhost:9000/api/v1/user/authenticate",
+          {},
+          {
+            headers: {
+              Authorization: `${token}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+
+        if (res.data.LoggedIn) {
+          setIsAuthenticated(true);
+        } else {
+          alert("You are not logged in");
+          navigate("/login");
+        }
+      } catch (error) {
+        console.error("Error during authentication:", error);
+        navigate("/login");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    checkAuthentication();
+  }, [navigate]);
+
+  if (loading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-gray-100">
+        <Loader className="w-12 h-12 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; 
+  }
 
   const createNewChat = () => {
     if (currentChat && currentChat.messages.length === 0) {
@@ -77,30 +135,47 @@ const Chat = () => {
         chat.id === currentChat.id ? updatedChat : chat
       ));
     }
-
     setIsLoading(true);
+    try {
+      const response = await axios.post("http://127.0.0.1:8000/ask", {
+        "question": userMessage.content,
+        "fileName": fileName
+      });
 
-    // Simulated AI response
-    setTimeout(() => {
-      const assistantMessage: Message = {
+      const aiMessage: Message = {
         role: 'assistant',
-        content: `I understand you're asking about ${userMessage.content}. Let me help you with that. This is a simulated response that would normally come from an AI model.`,
+        content: response.data.answer, 
         timestamp: new Date()
       };
-
+      
       const chatWithAiResponse: Chat = {
         ...updatedChat,
-        messages: [...updatedChat.messages, assistantMessage],
+        messages: [...updatedChat.messages, aiMessage],
         updatedAt: new Date()
       };
-
+      
       setCurrentChat(chatWithAiResponse);
       setChats(prev => prev.map(chat =>
         chat.id === currentChat.id ? chatWithAiResponse : chat
       ));
       setIsLoading(false);
-    }, 1000);
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  if (!fileName) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center text-center bg-gray-100">
+        <p className="text-lg font-medium text-gray-700">Please upload a dataset</p>
+        <button className="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600 transition" onClick={() => navigate("/upload")}>
+          Go Back
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-gradient-to-b from-slate-900 to-slate-800 flex flex-col">
