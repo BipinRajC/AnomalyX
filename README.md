@@ -1,6 +1,6 @@
 # AnomalyX: Adaptive Threat Detection in Network Ecosystems
 
-_AnomalyX is an innovative network security framework designed to provide adaptive and near real-time threat detection using advanced machine learning techniques and time-series analytics._
+_AnomalyX is an advanced network security framework engineered for adaptive, near real-time threat detection, leveraging sophisticated machine learning and time-series analytics. The system employs deep learning models, including LSTMs and Transformer networks, to analyze network traffic patterns and identify subtle anomalies indicative of malicious activity._
 
 ## 🔍 Core Technology Fusion
 - **Time-Series Analysis**: Powered by TimeGPT's predictive algorithms
