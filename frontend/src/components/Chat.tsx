@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Send, Bot, Sparkles, Brain, Zap, PlusCircle, MessageCircle, ChevronLeft, ChevronRight, Loader } from 'lucide-react';
+import { MessageSquare, Send, Bot, Sparkles, Brain, Zap, PlusCircle, Loader, Loader2 } from 'lucide-react';
 import Appbar from './Appbar';
 import axios from 'axios';
 import { useRecoilValue } from 'recoil';
 import { FileNameAtom } from '../atoms';
 import { useNavigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 
 export type Message = {
   role: 'user' | 'assistant';
@@ -17,7 +18,6 @@ export type Chat = {
   title: string;
   messages: Message[];
   createdAt: Date;
-  updatedAt: Date;
 };
 
 const Chat = () => {
@@ -31,6 +31,8 @@ const Chat = () => {
   const navigate = useNavigate()
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+  const [userId, setUserId] = useState<string>("");
+  const [createChatLoading, setCreateChatLoading] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -78,6 +80,13 @@ const Chat = () => {
     checkAuthentication();
   }, [navigate]);
 
+  useEffect(() => {
+    const payload = localStorage.getItem("token");
+    const token = payload?.split(" ")[1];
+    const decoded = jwtDecode(token!)
+    setUserId(decoded.userId)
+  }, [userId])
+
   if (loading) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-gray-100">
@@ -90,23 +99,33 @@ const Chat = () => {
     return null; 
   }
 
-  const createNewChat = () => {
-    if (currentChat && currentChat.messages.length === 0) {
-      // Don't create a new chat if the current one is empty
-      return;
+  const createNewChat = async () => {
+    try {
+      if (currentChat && currentChat.messages.length === 0) {
+        return;
+      }
+  
+      const newChat: Chat = {
+        id: crypto.randomUUID(),
+        title: 'New Chat',
+        messages: [],
+        createdAt: new Date(),
+      };
+  
+      const chat = await axios.post("http://localhost:9000/api/v1/chat/create", {
+        title: newChat.title,
+        userId
+      });
+  
+      newChat.id = chat.data.id;
+  
+      setChats(prev => [newChat, ...prev]);
+      setCurrentChat(newChat);
+      setIsSidebarOpen(false);
+    } catch (error) {
+      alert("Failed to create a new chat");
+      console.error("Error:", error);
     }
-
-    const newChat: Chat = {
-      id: crypto.randomUUID(),
-      title: 'New Chat',
-      messages: [],
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    setChats(prev => [newChat, ...prev]);
-    setCurrentChat(newChat);
-    setIsSidebarOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -119,12 +138,16 @@ const Chat = () => {
       timestamp: new Date()
     };
 
+    await axios.post('http://localhost:9000/api/v1/chat/message', {
+      chatId: currentChat.id,
+      content: userMessage.content
+    })
+
     setInput('');
 
     const updatedChat: Chat = {
       ...currentChat,
       messages: [...currentChat.messages, userMessage],
-      updatedAt: new Date()
     };
 
     setCurrentChat(updatedChat);
@@ -147,11 +170,15 @@ const Chat = () => {
         content: response.data.answer, 
         timestamp: new Date()
       };
+
+      await axios.post('http://localhost:9000/api/v1/chat/message', {
+        chatId: currentChat.id,
+        content: aiMessage.content
+      })
       
       const chatWithAiResponse: Chat = {
         ...updatedChat,
         messages: [...updatedChat.messages, aiMessage],
-        updatedAt: new Date()
       };
       
       setCurrentChat(chatWithAiResponse);
@@ -183,15 +210,15 @@ const Chat = () => {
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Overlay for mobile when sidebar is open */}
-        {isSidebarOpen && (
+        {/* {isSidebarOpen && (
           <div
             className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-20"
             onClick={() => setIsSidebarOpen(false)}
           />
-        )}
+        )} */}
 
         {/* Sidebar */}
-        <div
+        {/* <div
           className={`absolute md:relative inset-y-0 left-0 z-30 bg-slate-800 border-r border-slate-700 transition-all duration-300 ${isSidebarOpen ? 'w-80' : 'w-0'
             }`}
         >
@@ -199,14 +226,25 @@ const Chat = () => {
             <div className="flex-1 overflow-y-auto p-2 space-y-2">
               <div className="sticky top-0 z-10 bg-slate-800 pb-2">
                 <button
-                  onClick={createNewChat}
-                  className="w-full flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                  onClick={async () => {
+                    setCreateChatLoading(true);
+                    await createNewChat();
+                    setCreateChatLoading(false);
+                  }}
+                  disabled={createChatLoading}
+                  className="w-full flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors justify-center"
                 >
-                  <PlusCircle className="w-5 h-5" />
-                  New Chat
+                  {createChatLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <PlusCircle className="w-5 h-5" />
+                      New Chat
+                    </>
+                  )}
                 </button>
-              </div>
-              {chats.map(chat => (
+              </div> */}
+              {/* {chats.map(chat => (
                 <button
                   key={chat.id}
                   onClick={() => {
@@ -223,14 +261,14 @@ const Chat = () => {
                     {chat.messages[0]?.content.slice(0, 30) || 'New Chat'}
                   </span>
                 </button>
-              ))}
-            </div>
+              ))} */}
+            {/* </div>
           )}
-        </div>
+        </div> */}
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-none p-4">
+          {/* <div className="flex-none p-4">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="p-2 hover:bg-slate-700 rounded-lg text-slate-300 transition-colors"
@@ -241,7 +279,7 @@ const Chat = () => {
                 <ChevronRight className="w-5 h-5" />
               )}
             </button>
-          </div>
+          </div> */}
 
           <main className="flex-1 container mx-auto px-4 py-8 flex flex-col overflow-hidden">
             <div className="max-w-4xl mx-auto w-full h-full flex flex-col">
@@ -283,11 +321,24 @@ const Chat = () => {
                         Start a conversation with our AI assistant. Ask questions, get help, or explore new ideas.
                       </p>
                       <button
-                        onClick={createNewChat}
-                        className={`flex items-center gap-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors ${currentChat == null ? "" : "invisible"}`}
+                        onClick={async () => {
+                          setCreateChatLoading(true);
+                          await createNewChat();
+                          setCreateChatLoading(false);
+                        }}
+                        disabled={createChatLoading}
+                        className={`flex items-center gap-2 px-6 py-3 ${
+                          createChatLoading ? "bg-blue-400 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
+                        } text-white rounded-lg transition-colors ${currentChat == null ? "" : "invisible"}`}
                       >
-                        <PlusCircle className="w-5 h-5" />
-                        Start New Chat
+                        {createChatLoading ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <>
+                            <PlusCircle className="w-5 h-5" />
+                            Start New Chat
+                          </>
+                        )}
                       </button>
                     </div>
                   ) : (
