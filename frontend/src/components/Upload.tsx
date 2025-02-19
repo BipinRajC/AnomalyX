@@ -197,7 +197,7 @@ function UploadComponent() {
               <p className="text-slate-400">Secure real-time analysis</p>
             </div>
 
-            <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded flex items-center justify-center gap-2 transition-colors">
+            <button className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded flex items-center justify-center gap-2 transition-colors" onClick={() => window.open("http://localhost:5601", "_blank")}> 
               Begin Monitoring
               <ArrowRight className="w-5 h-5" />
             </button>
